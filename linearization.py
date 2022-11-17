@@ -1,9 +1,6 @@
 import sympy as sym
 import numpy as np
-import matplotlib.pyplot as plt
 import control
-from sympy import roots
-from non_linear_system import operation_points
 
 
 def system_linearization(h1_p, h2_p, h1_point, h2_point, h1, h2, u, T):

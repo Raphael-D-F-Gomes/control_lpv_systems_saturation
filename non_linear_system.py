@@ -1,5 +1,4 @@
 import sympy as sym
-from sympy import Poly, roots
 import numpy as np
 from sympy.solvers import solve
 
@@ -32,9 +31,10 @@ def operation_points(op_point: dict):
 
     elif list(op_point)[0] == 'h2':
         q12 = q12.subs({h2: op_point['h2']})
+        op_points['h1'] = solve(q12 - qout)[0]
+        q12 = q12.subs({h1: op_points['h1']})
 
         op_points['u'] = solve(qin - q12)[0]
-        op_points['h1'] = solve(q12 - qout)[0]
         op_points['h2'] = op_point['h2']
 
     if list(op_point)[0] == 'u':

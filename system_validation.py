@@ -1,7 +1,6 @@
 import sympy as sym
 import numpy as np
 import matplotlib.pyplot as plt
-import control
 from non_linear_system import operation_points, state_space_non_linear_system, solid_area
 from linearization import system_linearization, get_response_discrete_system
 
@@ -11,7 +10,9 @@ h1 = sym.var('h1')
 h2 = sym.var('h2')
 u = sym.var('u')
 
-h1_point = 0.2
+h1_point = 0.26
+h1_point = 0.16
+
 
 op_points = operation_points({'h1': h1_point})
 
