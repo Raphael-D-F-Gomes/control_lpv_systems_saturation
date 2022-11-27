@@ -70,8 +70,8 @@ def state_space_non_linear_system():
     mu = 0.4
     sigma = 0.55
     r = 0.31
-    z = 2.5 * np.pi * (h1 - mu)
-    w = -(h1 - mu) ** 2 / (2 * sigma ** 2)
+    z = 2.5 * np.pi * (h1/100 - mu)
+    w = -(h1/100 - mu) ** 2 / (2 * sigma ** 2)
 
     # z and w decomposed with taylor series approach
     z_part = 1 - z ** 2 / 2 + z ** 4 / 24 - z ** 6 / 720 + z ** 8 / 40320
@@ -115,3 +115,8 @@ def system_non_linear_equations(h1, h2, u):
     q12 = 0.95 * (32.4 * (h2 - h1) - 83.93) * 10e-5
 
     return qin, q12, qout
+
+
+if __name__ == '__main__':
+
+    print(operation_points({'h2': 20}), operation_points({'h2': 70}))

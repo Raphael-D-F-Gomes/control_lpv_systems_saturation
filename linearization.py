@@ -16,7 +16,7 @@ def system_linearization(h1_p, h2_p, h1_point, h2_point, h1, h2, u, T):
     B[0][0] = sym.diff(B[0][0], u).subs({h1: h1_point, h2: h2_point})
     B[1][0] = sym.diff(B[1][0], u).subs({h1: h1_point, h2: h2_point})
 
-    C = np.array([[1, 0]])
+    C = np.array([[0, 1]])
     D = np.array([[0]])
 
     continuos_sys = control.StateSpace(A, B, C, D)
