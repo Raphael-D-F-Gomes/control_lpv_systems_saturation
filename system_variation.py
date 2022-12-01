@@ -1,192 +1,193 @@
 import sympy as sym
 import numpy as np
 import matplotlib.pyplot as plt
-from non_linear_system import operation_points, state_space_non_linear_system, solid_area
+from non_linear_system import operation_points, state_space_non_linear_system, get_non_linear_system_by_point
 from linearization import system_linearization, get_response_discrete_system
 from build_lpv_system import parameters_behavior_by_interpolation
 from ortools.linear_solver import pywraplp
 
 
-def get_lpv_model_from_op_points_range(h1, h2, u, h1_min, h1_max, n_points, period,
-                                       plot: bool=False, verbose:bool =False):
+def get_system_linear_models(h1_range, period):
 
-    # operation points
+    h1 = sym.var('h1')
+    h2 = sym.var('h2')
+    u = sym.var('u')
+
     system_info = {'A11': [], 'A12': [], 'A21': [], 'A22': [], 'B11': [], 'B21': []}
-    h1_range = np.linspace(h1_min, h1_max, n_points)
 
     for h1_point in h1_range:
-
         op_points = operation_points({'h1': h1_point})
 
         # state space system
         h1_p, h2_p = state_space_non_linear_system()
 
+        A, B, C, D = system_linearization(h1_p, h2_p, op_points['h1'], op_points['h2'], h1, h2, u, period)
+        system_info['A11'].append(A[0][0])
+        system_info['A12'].append(A[0][1])
+        system_info['A21'].append(A[1][0])
+        system_info['A22'].append(A[1][1])
+        system_info['B11'].append(B[0][0])
+        system_info['B21'].append(B[1][0])
 
-        _, sys = system_linearization(h1_p, h2_p, op_points['h1'], op_points['h2'], h1, h2, u, period)
-        system_info['A11'].append(sys.A[0][0])
-        system_info['A12'].append(sys.A[0][1])
-        system_info['A21'].append(sys.A[1][0])
-        system_info['A22'].append(sys.A[1][1])
-        system_info['B11'].append(sys.B[0][0])
-        system_info['B21'].append(sys.B[1][0])
+    return system_info
 
-    nv = 4
-    parameters = {'A': np.zeros([nv, len(h1_range)])}
+
+def get_system_linear_models_full_behavior(h1_range, period):
+
+    system_info = {'A11': [], 'A12': [], 'A21': [], 'A22': [], 'B11': [], 'B21': []}
+
+    for h1_point in h1_range:
+
+        A, B, C, D = get_non_linear_system_by_point(h1_point, period)
+        system_info['A11'].append(A[0][0])
+        system_info['A12'].append(A[0][1])
+        system_info['A21'].append(A[1][0])
+        system_info['A22'].append(A[1][1])
+        system_info['B11'].append(B[0][0])
+        system_info['B21'].append(B[1][0])
+
+    return system_info
+
+
+def get_parameters_points(system_info, gains, h1_range, nv, elements):
+    parameters_values = {'A': np.zeros([nv, len(h1_range)])}
 
     for i, h1_point in enumerate(h1_range):
 
         solver = pywraplp.Solver.CreateSolver('GLOP')
 
-        alpha1 = solver.NumVar(0, 1, 'alpha1')
-        alpha2 = solver.NumVar(0, 1, 'alpha2')
-        alpha3 = solver.NumVar(0, 1, 'alpha3')
-        alpha4 = solver.NumVar(0, 1, 'alpha4')
+        parameters = [solver.NumVar(0, 1, f'alpha{i+1}') for i in range(nv)]
 
-        solver.Add(system_info['A21'][-1] * 4 * alpha1 == system_info['A21'][i])
-        solver.Add(system_info['A22'][0] * 2 * alpha2 + system_info['A22'][-1] * 2 * alpha3 == system_info['A22'][i])
-        solver.Add(system_info['B21'][-1] * 4 * alpha4 == system_info['B21'][i])
-        solver.Add(alpha1 + alpha2 + alpha3 + alpha4 == 1)
+        for j, element in enumerate(elements):
+            solver.Add(max(system_info[element]) * gains[element] * parameters[j] == float(system_info[element][i]))
+
+        solver.Add(sum(parameters) == 1)
 
         status = solver.Solve()
 
         if status == pywraplp.Solver.OPTIMAL:
-            alpha = [alpha1.solution_value(), alpha2.solution_value(), alpha3.solution_value(), alpha4.solution_value()]
-            parameters['A'][0][i] = alpha[0]
-            parameters['A'][1][i] = alpha[1]
-            parameters['A'][2][i] = alpha[2]
-            parameters['A'][3][i] = alpha[3]
+            alpha = [parameter.solution_value() for parameter in parameters]
+            for j in range(nv):
+                parameters_values['A'][j][i] = alpha[j]
         else:
             print('The problem does not have an optimal solution.')
 
+    return parameters_values
+
+
+def get_remaining_elements_values(remaining_elements, system_info, nv, h1_range, parameters):
+
     system_remaining_elements = {}
-    for element in ['A11', 'A12', 'B11']:
+    for element in remaining_elements:
 
         solver = pywraplp.Solver.CreateSolver('GLOP')
 
-        a1 = solver.NumVar(-max(system_info[element]), max(system_info[element]), 'a1')
-        a2 = solver.NumVar(-max(system_info[element]), max(system_info[element]), 'a2')
-        a3 = solver.NumVar(-max(system_info[element]), max(system_info[element]), 'a3')
-        a4 = solver.NumVar(-max(system_info[element]), max(system_info[element]), 'a4')
-        s = [solver.NumVar(0, solver.infinity(), f's{i}') for i in range(len(h1_range))]
+        a = [solver.NumVar(-float(max(system_info[element])) * 2, float(max(system_info[element])) * 2, f'a{j+1}')
+             for j in range(nv)]
+
+        # s = [solver.NumVar(0, solver.infinity(), f's{i}') for i in range(len(h1_range))]
+        s = solver.NumVar(0, solver.infinity(), f's')
 
         for i, h1_point in enumerate(h1_range):
 
-            solver.Add(a1 * parameters['A'][0][i] + a2 * parameters['A'][1][i]
-                       + a3 * parameters['A'][2][i] + a4 * parameters['A'][3][i]
-                       - system_info[element][i] <= s[i])
-            solver.Add(a1 * parameters['A'][0][i] + a2 * parameters['A'][1][i]
-                       + a3 * parameters['A'][2][i] + a4 * parameters['A'][3][i]
-                       - system_info[element][i] >= -s[i])
+            equation = [parameters['A'][j][i] * a[j] for j in range(nv)]
+            solver.Add(sum(equation) - float(system_info[element][i]) <= s)
+            solver.Add(sum(equation) - float(system_info[element][i]) >= -s)
 
-        solver.Minimize(sum(s))
+        solver.Minimize(s)
 
         status = solver.Solve()
 
         if status == pywraplp.Solver.OPTIMAL:
-            system_remaining_elements[element] = [a1.solution_value(), a2.solution_value(),
-                                                  a3.solution_value(),  a4.solution_value()]
+            system_remaining_elements[element] = [value.solution_value() for value in a]
         else:
             print('The problem does not have an optimal solution.')
 
+    return system_remaining_elements
 
-    parameters_equation = parameters_behavior_by_interpolation(parameters['A'], h1_range, True)
-    alpha_1 = np.poly1d(parameters_equation[0])
-    alpha_2 = np.poly1d(parameters_equation[1])
-    alpha_3 = np.poly1d(parameters_equation[2])
-    alpha_4 = np.poly1d(parameters_equation[3])
+
+def get_lpv_model_from_op_points_range(h1, h2, u, period, h1_min, h1_max, n_points, linearization,
+                                       plot: bool = False, verbose: bool = True):
+
+    h1_range = np.linspace(h1_min, h1_max, n_points)
+    system_info = linearization(h1_range, period)
+
+    nv = 5
+    gains = {'A21': 4, 'A22': 4, 'B21': 4, 'B11': 4}
+    elements = list(gains.keys())
+    parameters = get_parameters_points(system_info, gains, h1_range, nv, elements)
+
+    remaining_elements = list(set(list(system_info.keys())) - set(elements))
+    system_remaining_elements = get_remaining_elements_values(remaining_elements, system_info, nv, h1_range, parameters)
+
+    parameters_equation = parameters_behavior_by_interpolation(parameters['A'], h1_range, plot)
+    alpha = []
+    for j in range(nv):
+        alpha += [np.poly1d(parameters_equation[j])]
 
     lpv_system = {}
 
-    lpv_system['A21'] = [system_info['A21'][-1] * 4 * alpha_1(h1) for h1 in h1_range]
-    lpv_system['B21'] = [system_info['B21'][-1] * 4 * alpha_4(h1) for h1 in h1_range]
-    lpv_system['A22'] = [system_info['A22'][0] * 2 * alpha_2(h1) + system_info['A22'][-1] * 2 * alpha_3(h1)
-                         for h1 in h1_range]
+    for i, element in enumerate(elements):
+        lpv_system[element] = [max(system_info[element]) * gains[element] * alpha[i](h1) for h1 in h1_range]
 
-    lpv_system['A11'] = [system_remaining_elements['A11'][0] * alpha_1(h1)
-                         + system_remaining_elements['A11'][1] * alpha_2(h1)
-                         + system_remaining_elements['A11'][2] * alpha_3(h1)
-                         + system_remaining_elements['A11'][3] * alpha_4(h1) for h1 in h1_range]
-    lpv_system['A12'] = [system_remaining_elements['A12'][0] * alpha_1(h1)
-                         + system_remaining_elements['A12'][1] * alpha_2(h1)
-                         + system_remaining_elements['A12'][2] * alpha_3(h1)
-                         + system_remaining_elements['A12'][3] * alpha_4(h1) for h1 in h1_range]
-    lpv_system['B11'] = [system_remaining_elements['B11'][0] * alpha_1(h1)
-                         + system_remaining_elements['B11'][1] * alpha_2(h1)
-                         + system_remaining_elements['B11'][2] * alpha_3(h1)
-                         + system_remaining_elements['B11'][3] * alpha_4(h1) for h1 in h1_range]
+    for element in remaining_elements:
+        lpv_system[element] = [sum([system_remaining_elements[element][j] * alpha[j](h1) for j in range(nv)])
+                               for h1 in h1_range]
 
     if plot:
-        plt.figure(1, figsize=(12, 9))
-        plt.plot(h1_range, system_info['A21'], 'blue')
-        plt.plot(h1_range, lpv_system['A21'], 'b--')
-        plt.plot(h1_range, system_info['A22'], 'r')
-        plt.plot(h1_range, lpv_system['A22'], 'r--')
+        plot_elements_comparison(system_info, lpv_system, h1_range)
+
+    lpv_complete_system = get_lpv_complete_system(system_info, nv, elements, system_remaining_elements, gains, verbose)
+
+    return lpv_complete_system, parameters_equation
+
+
+def plot_elements_comparison(system_info, lpv_system, h1_range):
+    colors = ['b', 'k', 'r', 'm', 'c', 'g', 'y', 'p']
+    for i, element in enumerate(system_info):
+        plt.figure(i, figsize=(12, 9))
+        plt.plot(h1_range, system_info[element], colors[i])
+        plt.plot(h1_range, lpv_system[element], colors[i] + '--')
+        plt.legend(labels=(f'{element} op point', f'{element} lpv system'))
         plt.grid()
-        plt.legend(labels=(f'A21 op point', f'A21 lpv system', f'A22 op point', f'A22 lpv system'))
         plt.xlabel('h1 [cm]')
-        plt.ylabel('A')
-
-        plt.figure(2, figsize=(12, 9))
-        plt.plot(h1_range, system_info['A12'], 'blue')
-        plt.plot(h1_range, lpv_system['A12'], 'b--')
-        plt.plot(h1_range, system_info['A11'], 'r')
-        plt.plot(h1_range, lpv_system['A11'], 'r--')
-        plt.grid()
-        plt.legend(labels=(f'A12 op point', f'A12 lpv system', f'A11 op point', f'A11 lpv system'))
-        plt.xlabel('h1 [cm]')
-        plt.ylabel('A')
-
-        plt.figure(3, figsize=(12, 9))
-        plt.plot(h1_range, system_info['B11'], 'blue')
-        plt.plot(h1_range, lpv_system['B11'], 'b--')
-        plt.plot(h1_range, system_info['B21'], 'r')
-        plt.plot(h1_range, lpv_system['B21'], 'r--')
-        plt.grid()
-        plt.legend(labels=(f'B11 op point', f'B11 lpv system', f'B21 op point', f'B21 lpv system'))
-        plt.xlabel('h1 [cm]')
-        plt.ylabel('A')
-
-    lpv_system = {'A1': np.array([[system_remaining_elements['A11'][0], system_remaining_elements['A12'][0]],
-                                   [system_info['A21'][-1] * 4, 0]]),
-                   'A2': np.array([[system_remaining_elements['A11'][1], system_remaining_elements['A12'][1]],
-                                   [0, system_info['A22'][0] * 2]]),
-                   'A3': np.array([[system_remaining_elements['A11'][2], system_remaining_elements['A12'][2]],
-                                   [0, system_info['A22'][-1] * 2]]),
-                   'A4': np.array([[system_remaining_elements['A11'][3], system_remaining_elements['A12'][3]],
-                                   [0, 0]]),
-                   'B1': np.array([[system_remaining_elements['B11'][0]], [0]]),
-                   'B2': np.array([[system_remaining_elements['B11'][1]], [0]]),
-                   'B3': np.array([[system_remaining_elements['B11'][2]], [0]]),
-                   'B4': np.array([[system_remaining_elements['B11'][3]], [system_info['B21'][-1] * 4]])}
-
-    if verbose:
-        print('LPV system:\n'
-              f"A1 = [[{system_remaining_elements['A11'][0]}, {system_remaining_elements['A12'][0]}],"
-              f" [{system_info['A21'][-1] * 4}, {0}]]\n\n"
-              f"A2 = [[{system_remaining_elements['A11'][1]}, {system_remaining_elements['A12'][1]}],"
-              f" [{0}, {system_info['A22'][0] * 2}]]\n\n"
-              f"A3 = [[{system_remaining_elements['A11'][2]}, {system_remaining_elements['A12'][2]}],"
-              f" [{0}, {system_info['A22'][-1] * 2}]]\n\n"
-              f"A4 = [[{system_remaining_elements['A11'][3]}, {system_remaining_elements['A12'][3]}],"
-              f" [{0}, {0}]]\n\n"
-              f"B1 = [[{system_remaining_elements['B11'][0]}],"
-              f"     [{0}]]\n\n"
-              f"B2 = [[{system_remaining_elements['B11'][1]}],"
-              f"     [{0}]]\n\n"
-              f"B3 = [[{system_remaining_elements['B11'][2]}],"
-              f"     [{0}]]\n\n"
-              f"B3 = [[{system_remaining_elements['B11'][3]}],"
-              f"     [{system_info['B21'][-1] * 4}]]\n\n")
-
-        print('parameters equation:\n'
-              f"alpha_1 = {parameters_equation[0]}\n"
-              f"alpha_2 = {parameters_equation[1]}\n"
-              f"alpha_3 = {parameters_equation[2]}\n"
-              f"alpha_4 = {parameters_equation[3]}\n")
+        plt.ylabel(element)
 
     plt.show()
 
-    return lpv_system, parameters_equation
+
+def get_lpv_complete_system(system_info, nv, elements, system_remaining_elements, gains, verbose):
+    lpv_complete_system = {}
+    for i, vertice in enumerate([f'A{j + 1}' for j in range(nv)]):
+
+        b_vertice = f'B{i+1}'
+
+        lpv_complete_system[vertice] = np.zeros([2, 2])
+        lpv_complete_system[b_vertice] = np.zeros([2, 1])
+
+        vertice_system = {}
+        for element in system_info:
+
+            if element in elements:
+                if elements.index(element) == i:
+                    vertice_system[element] = max(system_info[element]) * gains[element]
+                else:
+                    vertice_system[element] = 0
+            else:
+                vertice_system[element] = system_remaining_elements[element][i]
+
+            row = int(element[-2]) - 1
+            column = int(element[-1]) - 1
+            if element[0] == 'A':
+                lpv_complete_system[vertice][row][column] = vertice_system[element]
+            if element[0] == 'B':
+                lpv_complete_system[b_vertice][row][column] = vertice_system[element]
+
+        if verbose:
+            print(f'\n\n{vertice}:\n', lpv_complete_system[vertice])
+            print(f'\n\n{b_vertice}:\n', lpv_complete_system[b_vertice])
+
+    return lpv_complete_system
 
 
 if __name__ == '__main__':
@@ -202,5 +203,4 @@ if __name__ == '__main__':
     verbose = True
     n_points = 100
 
-    get_lpv_model_from_op_points_range(h1, h2, u, h1_min, h1_max, n_points, period,
-                                       plot, verbose)
+    get_lpv_model_from_op_points_range(h1, h2, u, period, h1_min, h1_max, n_points, plot, verbose)

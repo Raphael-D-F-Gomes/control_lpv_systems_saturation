@@ -54,53 +54,51 @@ def parameters_behavior(h1_min, h1_max):
 
 def parameters_behavior_by_interpolation(alpha_points, h1, plot=False):
 
-    alpha_1 = np.polyfit(h1, alpha_points[0], 5)
-    alpha_2 = np.polyfit(h1, alpha_points[1], 5)
-    alpha_3 = np.polyfit(h1, alpha_points[2], 5)
-    alpha_4 = np.polyfit(h1, alpha_points[3], 5)
-    poly_alpha_1 = np.poly1d(alpha_1)
-    poly_alpha_2 = np.poly1d(alpha_2)
-    poly_alpha_3 = np.poly1d(alpha_3)
-    poly_alpha_4 = np.poly1d(alpha_4)
+    alpha = [np.polyfit(h1, alpha_values, 5) for alpha_values in alpha_points]
+
+    poly_alpha = [np.poly1d(equation) for equation in alpha]
+    colors = ['b', 'k', 'r', 'm', 'c', 'g', 'y', 'p']
 
     if plot:
         plt.figure(0, figsize=(12, 9))
-        plt.plot(h1, alpha_points[0], 'b')
-        plt.plot(h1, poly_alpha_1(h1), 'b--')
         plt.grid()
+        legend = []
+        for i in range(len(alpha_points)):
+            plt.plot(h1, alpha_points[i], colors[i])
+            plt.plot(h1, poly_alpha[i](h1), colors[i] + '--')
+            legend += [f'alpha_{i+1} (points)', f'alpha_{i+1} (equation)']
 
-        plt.plot(h1, alpha_points[1], 'g')
-        plt.plot(h1, poly_alpha_2(h1), 'g--')
-
-        plt.plot(h1, alpha_points[2], 'c')
-        plt.plot(h1, poly_alpha_3(h1), 'c--')
-
-        plt.plot(h1, alpha_points[3], 'k')
-        plt.plot(h1, poly_alpha_4(h1), 'k--')
-
-        plt.legend(labels=('alpha_1 (points)', 'alpha_1 (equation)',
-                           'alpha_2 (points)', 'alpha_2 (equation)',
-                           'alpha_3 (points)', 'alpha_3 (equation)',
-                           'alpha_4 (points)', 'alpha_4 (equation)'))
+        plt.legend(legend)
         plt.xlabel('h1 [cm]')
         plt.ylabel('alphas')
 
         plt.show()
 
-    return alpha_1, alpha_2, alpha_3, alpha_4
+    return alpha
 
 
-def get_lpv_discrete_system_response(system_info, initial_conditions, parameters, input):
+def get_lpv_discrete_system_response(system_info, op_points, parameters, input):
 
     n_vertices = len(parameters)
     h0 = np.array([[0], [0]])
     h = np.array(h0)
+    h_real = np.array([[op_points['h2']], [op_points['h1']]])
     poly_alpha = [np.poly1d(parameter) for parameter in parameters]
+    last_input = input[0]
 
     for i in range(1, len(input)):
-        h0 = [[h[0][-1]], [h[1][-1]]]
-        h1_real = h[1][-1] + initial_conditions['h1']
-        uk = input[i - 1] - initial_conditions['u']
+        h0_real = np.array([[h[0][-1] + op_points['h2']], [h[1][-1] + op_points['h1']]])
+        h_real = np.append(h_real, h0_real, axis=1)
+        h1_real = h0_real[1][0]
+        h0 = np.array([[h[0][-1]], [h[1][-1]]])
+
+        if last_input != input[i-1]:
+            h2_real = h[0][-1] + op_points['h2']
+            op_points = operation_points({'u': input[i - 1]})
+            h0 = np.array([[h2_real - op_points['h2']], [h1_real - op_points['h1']]])
+            last_input = input[i - 1]
+
+        uk = 0
         alpha = np.array([p(h1_real) for p in poly_alpha])
         A = system_info['A1'] * alpha[0]
         B = system_info['B1'] * alpha[0]
@@ -110,6 +108,32 @@ def get_lpv_discrete_system_response(system_info, initial_conditions, parameters
             B += system_info[f'B{j+1}'] * alpha[j]
 
         h_aux = np.dot(A, h0) + np.dot(B, uk)
+        h = np.append(h, h_aux, axis=1)
+
+    return h_real
+
+
+def get_lpv_discrete_system_response_full_behavior(system_info, op_points, parameters, input):
+
+    n_vertices = len(parameters)
+    h0 = np.array([[op_points['h2']], [op_points['h1']]])
+    h = np.array(h0)
+    poly_alpha = [np.poly1d(parameter) for parameter in parameters]
+
+    for i in range(1, len(input)):
+
+        h0 = np.array([[h[0][-1]], [h[1][-1]]])
+
+        uk = input[i - 1]
+        alpha = np.array([p(h0[1][0]) for p in poly_alpha])
+        A = system_info['A1'] * alpha[0]
+        B = system_info['B1'] * alpha[0]
+
+        for j in range(1, n_vertices):
+            A += system_info[f'A{j+1}'] * alpha[j]
+            B += system_info[f'B{j+1}'] * alpha[j]
+
+        h_aux = np.dot(A, h0) + np.dot(B, uk)  # + np.array([[0.1679304266487], [-0.0004155742875]])
         h = np.append(h, h_aux, axis=1)
 
     return h

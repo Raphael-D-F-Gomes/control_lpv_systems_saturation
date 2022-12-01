@@ -1,9 +1,10 @@
 import sympy as sym
 import numpy as np
 import control
+from scipy.signal import cont2discrete, lti, dlti, dstep
 
 
-def system_linearization(h1_p, h2_p, h1_point, h2_point, h1, h2, u, T):
+def system_linearization(h1_p, h2_p, h1_point, h2_point, h1, h2, u, dt):
 
     A = np.array([[h2_p, h2_p], [h1_p, h1_p]])
     B = np.array([[h2_p], [h1_p]])
@@ -20,19 +21,25 @@ def system_linearization(h1_p, h2_p, h1_point, h2_point, h1, h2, u, T):
     D = np.array([[0]])
 
     continuos_sys = control.StateSpace(A, B, C, D)
-    discrete_sys = continuos_sys.sample(T)
+    # discrete_sys = continuos_sys.sample(T)
+    methods = ['zoh', 'bilinear', 'euler', 'backward_diff', 'foh', 'impulse']
+    discrete_sys = cont2discrete((A, B, C, D), dt, method=methods[4])
+    A = discrete_sys[0]
+    B = discrete_sys[1]
+    C = discrete_sys[2]
+    D = discrete_sys[3]
 
-    return continuos_sys, discrete_sys
+    return A, B, C, D
 
 
-def get_response_discrete_system(sys, t, u, x0):
+def get_response_discrete_system(A, B, t, u, x0):
 
     x = np.array(x0)
 
     for i in range(1, len(t)):
         uk = u[i-1]
         x0 = [[x[0][-1]], [x[1][-1]]]
-        x_aux = np.dot(sys.A, x0) + np.dot(sys.B, uk)
+        x_aux = np.dot(A, x0) + np.dot(B, uk)
         x = np.append(x, x_aux, axis=1)
 
     return x

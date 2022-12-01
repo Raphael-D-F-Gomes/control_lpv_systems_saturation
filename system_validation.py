@@ -11,7 +11,7 @@ def system_validation(h1, h2, u, op_point, period, time_range, input_variation, 
 
     diff_h1, diff_h2 = state_space_non_linear_system()
 
-    _, discrete_sys = system_linearization(diff_h1, diff_h2, op_points['h1'], op_points['h2'], h1, h2, u, period)
+    A, B, C, D = system_linearization(diff_h1, diff_h2, op_points['h1'], op_points['h2'], h1, h2, u, period)
 
     t0 = 0
     t1 = period * time_range
@@ -23,7 +23,7 @@ def system_validation(h1, h2, u, op_point, period, time_range, input_variation, 
     h2_0 = 0
     h0 = np.array([[h2_0], [h1_0]])
 
-    h = get_response_discrete_system(discrete_sys, t, F, h0)
+    h = get_response_discrete_system(A, B, t, F, h0)
 
     if plot:
         h2 = h[0] + op_points['h2']
@@ -52,7 +52,7 @@ def system_validation(h1, h2, u, op_point, period, time_range, input_variation, 
 
         plt.show()
 
-    return discrete_sys, h
+    return h
 
 
 if __name__ == '__main__':
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     u = sym.var('u')
     op_point = {'h1': 7}
     period = 5.62
-    input_variation = 2
+    input_variation = 0.5
     plot = True
     time_range = 2000
     sys, h = system_validation(h1, h2, u, op_point, period, time_range, input_variation, plot)
