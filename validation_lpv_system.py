@@ -82,7 +82,7 @@ def execute_validation(op_point, n_points, h1_min, h1_max, period, get_response,
     print(parameters)
 
     simulation_time = 12500
-    simulation_step = period
+    simulation_step = 1
 
     iterations = int(simulation_time / simulation_step)
 
@@ -143,11 +143,11 @@ def execute_simple_validation(op_point, n_points, h1_min, h1_max, period, input_
 
 if __name__ == '__main__':
 
-    # get_response = get_lpv_discrete_system_response
-    get_response = get_lpv_discrete_system_response_full_behavior
-    # linearization = get_system_linear_models
-    linearization = get_system_linear_models_full_behavior
-    period = 1
+    get_response = get_lpv_discrete_system_response
+    # get_response = get_lpv_discrete_system_response_full_behavior
+    linearization = get_system_linear_models
+    # linearization = get_system_linear_models_full_behavior
+    period = 5.62
     h1_min = 7
     h1_max = 37
     n_points = 100

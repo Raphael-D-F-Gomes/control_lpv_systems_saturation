@@ -77,28 +77,25 @@ def parameters_behavior_by_interpolation(alpha_points, h1, plot=False):
     return alpha
 
 
-def get_lpv_discrete_system_response(system_info, op_points, parameters, input):
+def get_lpv_discrete_system_response(system_info, initial_conditions, parameters, input):
 
     n_vertices = len(parameters)
     h0 = np.array([[0], [0]])
     h = np.array(h0)
-    h_real = np.array([[op_points['h2']], [op_points['h1']]])
+    h_real = np.array([[initial_conditions['h2']], [initial_conditions['h1']]])
+    h1_real = initial_conditions['h1']
     poly_alpha = [np.poly1d(parameter) for parameter in parameters]
-    last_input = input[0]
 
     for i in range(1, len(input)):
-        h0_real = np.array([[h[0][-1] + op_points['h2']], [h[1][-1] + op_points['h1']]])
-        h_real = np.append(h_real, h0_real, axis=1)
-        h1_real = h0_real[1][0]
-        h0 = np.array([[h[0][-1]], [h[1][-1]]])
 
-        if last_input != input[i-1]:
+        '''if last_input != input[i-1]:
             h2_real = h[0][-1] + op_points['h2']
             op_points = operation_points({'u': input[i - 1]})
             h0 = np.array([[h2_real - op_points['h2']], [h1_real - op_points['h1']]])
-            last_input = input[i - 1]
+            last_input = input[i - 1]'''
 
-        uk = 0
+        op_points = operation_points({'h1': h1_real})
+        uk = input[i - 1] - op_points['u']
         alpha = np.array([p(h1_real) for p in poly_alpha])
         A = system_info['A1'] * alpha[0]
         B = system_info['B1'] * alpha[0]
@@ -109,6 +106,12 @@ def get_lpv_discrete_system_response(system_info, op_points, parameters, input):
 
         h_aux = np.dot(A, h0) + np.dot(B, uk)
         h = np.append(h, h_aux, axis=1)
+
+        h0_real = np.array([[h[0][-1] + op_points['h2']], [h[1][-1] + op_points['h1']]])
+        h_real = np.append(h_real, h0_real, axis=1)
+        h1_real = h0_real[1][0]
+        # h0 = np.array([[h[0][-1]], [h[1][-1]]])
+        h0 = np.array([[0], [0]])
 
     return h_real
 

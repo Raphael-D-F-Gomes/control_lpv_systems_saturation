@@ -82,7 +82,7 @@ def get_remaining_elements_values(remaining_elements, system_info, nv, h1_range,
 
         solver = pywraplp.Solver.CreateSolver('GLOP')
 
-        a = [solver.NumVar(-float(max(system_info[element])) * 2, float(max(system_info[element])) * 2, f'a{j+1}')
+        a = [solver.NumVar(-float(max(system_info[element])) * 100, float(max(system_info[element])) * 100, f'a{j+1}')
              for j in range(nv)]
 
         # s = [solver.NumVar(0, solver.infinity(), f's{i}') for i in range(len(h1_range))]
@@ -112,8 +112,8 @@ def get_lpv_model_from_op_points_range(h1, h2, u, period, h1_min, h1_max, n_poin
     h1_range = np.linspace(h1_min, h1_max, n_points)
     system_info = linearization(h1_range, period)
 
-    nv = 5
-    gains = {'A21': 4, 'A22': 4, 'B21': 4, 'B11': 4}
+    nv = 3
+    gains = {'A21': 4, 'A22': 4}
     elements = list(gains.keys())
     parameters = get_parameters_points(system_info, gains, h1_range, nv, elements)
 
