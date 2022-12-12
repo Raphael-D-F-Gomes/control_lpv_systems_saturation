@@ -59,6 +59,34 @@ def get_parameters_points(system_info, gains, h1_range, nv, elements):
         parameters = [solver.NumVar(0, 1, f'alpha{i+1}') for i in range(nv)]
 
         for j, element in enumerate(elements):
+            lpv_sum = system_info[element][0] * parameters[0] + system_info[element][-1] * parameters[1]
+            solver.Add(lpv_sum == float(system_info[element][i]))
+            solver.Add(lpv_sum == float(system_info[element][i]))
+
+        solver.Add(sum(parameters) == 1)
+
+        status = solver.Solve()
+
+        if status == pywraplp.Solver.OPTIMAL:
+            alpha = [parameter.solution_value() for parameter in parameters]
+            for j in range(nv):
+                parameters_values['A'][j][i] = alpha[j]
+        else:
+            print('The problem does not have an optimal solution.')
+
+    return parameters_values
+
+
+def get_parameters_points2(system_info, gains, h1_range, nv, elements):
+    parameters_values = {'A': np.zeros([nv, len(h1_range)])}
+
+    for i, h1_point in enumerate(h1_range):
+
+        solver = pywraplp.Solver.CreateSolver('GLOP')
+
+        parameters = [solver.NumVar(0, 1, f'alpha{i+1}') for i in range(nv)]
+
+        for j, element in enumerate(elements):
             solver.Add(max(system_info[element]) * gains[element] * parameters[j] == float(system_info[element][i]))
 
         solver.Add(sum(parameters) == 1)
@@ -112,10 +140,22 @@ def get_lpv_model_from_op_points_range(h1, h2, u, period, h1_min, h1_max, n_poin
     h1_range = np.linspace(h1_min, h1_max, n_points)
     system_info = linearization(h1_range, period)
 
-    nv = 3
-    gains = {'A21': 4, 'A22': 4}
+    nv = 2
+    # gains = {'A21': 4, 'A22': 4}
+    gains = {}
     elements = list(gains.keys())
-    parameters = get_parameters_points(system_info, gains, h1_range, nv, elements)
+    # parameters = get_parameters_points(system_info, {'A21': 4, 'A22': 4}, h1_range, nv, ['A21', 'A22'])
+    # alpha_1 = np.poly1d([-1 / 12, 37 / 12])
+    # alpha_2 = np.poly1d([1 / 12, -25 / 12])
+    h1_min = h1_range[0]
+    h1_max = h1_range[-1]
+    b = 0.07
+    a = (1 - (h1_min - h1_max) * b) / (h1_min ** 2 - h1_max ** 2)
+    c = -a * h1_max ** 2 - b * h1_max
+    alpha_1 = np.poly1d([a, b, c])
+    alpha_2 = np.poly1d([-a, -b, 1 - c])
+    parameters = {}
+    parameters['A'] = [alpha_1(h1_range), alpha_2(h1_range)]
 
     remaining_elements = list(set(list(system_info.keys())) - set(elements))
     system_remaining_elements = get_remaining_elements_values(remaining_elements, system_info, nv, h1_range, parameters)

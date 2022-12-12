@@ -82,7 +82,7 @@ def execute_validation(op_point, n_points, h1_min, h1_max, period, get_response,
     print(parameters)
 
     simulation_time = 12500
-    simulation_step = 1
+    simulation_step = 2
 
     iterations = int(simulation_time / simulation_step)
 
@@ -148,7 +148,7 @@ if __name__ == '__main__':
     linearization = get_system_linear_models
     # linearization = get_system_linear_models_full_behavior
     period = 5.62
-    h1_min = 7
+    h1_min = 15
     h1_max = 37
     n_points = 100
     op_point = {'h1': 15}
