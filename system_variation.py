@@ -145,13 +145,26 @@ def get_lpv_model_from_op_points_range(h1, h2, u, period, h1_min, h1_max, n_poin
 def plot_elements_comparison(system_info, lpv_system, h1_range):
     colors = ['b', 'k', 'r', 'm', 'c', 'g', 'y', 'p']
     for i, element in enumerate(system_info):
-        plt.figure(i, figsize=(12, 9))
-        plt.plot(h1_range, system_info[element], colors[i])
-        plt.plot(h1_range, lpv_system[element], colors[i] + '--')
-        plt.legend(labels=(f'{element} op point', f'{element} lpv system'))
-        plt.grid()
-        plt.xlabel('h1 [cm]')
-        plt.ylabel(element)
+        if element[0] == 'A':
+            plt.figure(0, figsize=(12, 9))
+            plt.plot(h1_range, system_info[element], colors[i])
+            plt.plot(h1_range, lpv_system[element], colors[i] + '--')
+            plt.grid()
+            plt.legend(labels=(f'a11 sistema linear', f'a11 sistema LPV', f'a12 sistema linear', f'a12 sistema LPV',
+                               f'a21 sistema linear', f'a21 sistema LPV', f'a22 sistema linear', f'a22 sistema LPV',))
+            plt.xlabel('h1 [cm]')
+            plt.ylabel(element)
+        else:
+            plt.figure(1, figsize=(12, 9))
+            plt.plot(h1_range, system_info[element], colors[i])
+            plt.plot(h1_range, lpv_system[element], colors[i] + '--')
+            plt.legend(labels=(f'b11 sistema linear', f'b11 sistema LPV', f'b21 sistema linear', f'b21 sistema LPV'))
+            plt.grid()
+            plt.xlabel('h1 [cm]')
+            plt.ylabel(element)
+
+
+    legend_aij = [f'{element.lower()} sistema linear' for element in system_info]
 
     plt.show()
 
